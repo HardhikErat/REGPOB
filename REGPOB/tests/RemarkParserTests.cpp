@@ -28,13 +28,13 @@ int main()
 
     ExpectEq(
         UpdateRemarks("PBN/A1B1C1D1L1O1S2 DOF/260623 RMK/TCAS", "VTIBY", 0),
-        "PBN/A1B1C1D1L1O1S2 DOF/260623 REG/VTIBY RMK/TCAS P//S",
-        "Case 1 registration after DOF");
+        "PBN/A1B1C1D1L1O1S2 DOF/260623 REG/VTIBY RMK/TCAS",
+        "Case 1 registration only after DOF");
 
     ExpectEq(
         UpdateRemarks("PBN/A1B1C1D1L1O1S2 DOF/260623 RMK/TCAS", "", 67),
-        "PBN/A1B1C1D1L1O1S2 DOF/260623 REG/ RMK/TCAS P/67/S",
-        "Case 2 pob after DOF registration slot");
+        "PBN/A1B1C1D1L1O1S2 DOF/260623 RMK/TCAS P/67/S",
+        "Case 2 pob only without empty REG");
 
     ExpectEq(
         UpdateRemarks("PBN/A1B1C1D1L1O1S2 DOF/260623 RMK/TCAS", "VTIBY", 67),
@@ -46,8 +46,8 @@ int main()
             "PBN/A1B1C1D1L1O1S2 DOF/260503 EET/VABF0038 OPR/AIC PER/C RMK/TCAS SIMBRIEF /V/",
             "N359SB",
             0),
-        "PBN/A1B1C1D1L1O1S2 DOF/260503 REG/N359SB EET/VABF0038 OPR/AIC PER/C RMK/TCAS SIMBRIEF P//S /V/",
-        "Case REG after DOF before OPR with /V/");
+        "PBN/A1B1C1D1L1O1S2 DOF/260503 REG/N359SB EET/VABF0038 OPR/AIC PER/C RMK/TCAS SIMBRIEF /V/",
+        "Case REG after DOF before OPR without empty POB");
 
     ExpectEq(
         UpdateRemarks("PBN/A1B1C1D1L1O1S2 OPR/AIC PER/C RMK/TCAS", "VTIBY", 67),
@@ -56,18 +56,18 @@ int main()
 
     ExpectEq(
         UpdateRemarks("PBN/A1B1C1D1L1O1S2 REG/OLDREG RMK/TCAS", "VTIBY", 0),
-        "PBN/A1B1C1D1L1O1S2 RMK/TCAS REG/VTIBY P//S",
-        "Case 4 replace registration appends at end");
+        "PBN/A1B1C1D1L1O1S2 RMK/TCAS REG/VTIBY",
+        "Case 4 replace registration without empty POB");
 
     ExpectEq(
         UpdateRemarks("PBN/A1B1C1D1L1O1S2 P/12/S RMK/TCAS", "", 67),
-        "PBN/A1B1C1D1L1O1S2 RMK/TCAS REG/ P/67/S",
-        "Case 5 replace pob appends at end");
+        "PBN/A1B1C1D1L1O1S2 RMK/TCAS P/67/S",
+        "Case 5 replace pob without empty REG");
 
     ExpectEq(
         UpdateRemarks("PBN/A1B1C1D1L1O1S2 REG/OLD P/10/S RMK/TCAS", "VTIBY", 67),
         "PBN/A1B1C1D1L1O1S2 RMK/TCAS REG/VTIBY P/67/S",
-        "Case 6 replace both appends at end");
+        "Case 6 replace both");
 
     ExpectEq(
         UpdateRemarks("PBN/A1B1C1D1L1O1S2 /V/", "VTIBY", 67),
@@ -96,8 +96,13 @@ int main()
 
     ExpectEq(
         UpdateRemarks("PBN/A1B1C1D1L1O1S2 REG/VTIBY P/67/S RMK/TCAS", "", 0),
-        "PBN/A1B1C1D1L1O1S2 RMK/TCAS REG/ P//S",
-        "Case clear both keeps placeholders at end");
+        "PBN/A1B1C1D1L1O1S2 RMK/TCAS",
+        "Case clear both removes REG and POB tokens");
+
+    ExpectEq(
+        UpdateRemarks("PBN/A1B1C1D1L1O1S2 DOF/260623 RMK/TCAS", "", 0),
+        "PBN/A1B1C1D1L1O1S2 DOF/260623 RMK/TCAS",
+        "Case empty values leave remarks unchanged");
 
     assert(ContainsRegistrationToken("RMK/X REG/ P//S /V/"));
     assert(ContainsPobToken("RMK/X REG/ P//S /V/"));
@@ -114,6 +119,8 @@ int main()
 
     assert(ExtractRegistration(sampleRemarks) == "VTIBY");
     assert(ExtractPOB(sampleRemarks) == 67);
+    assert(ExtractRegistration("PBN/A1 DOF/260503 REG/N359SB OPR/AIC /V/") == "N359SB");
+    assert(ExtractPOB("PBN/A1 DOF/260503 REG/N359SB OPR/AIC /V/") == -1);
     assert(Validation::SanitizeRegistration("VT-IBY") == "VTIBY");
     assert(Validation::IsValidRegistration("VT-IBY"));
     assert(!Validation::IsValidRegistration("VT/IBY"));

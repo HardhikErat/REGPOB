@@ -191,22 +191,46 @@ namespace RemarkParser
             }),
             tokens.end());
 
-        const std::string regToken = "REG/" + registration;
-        const std::string pobToken = pob > 0 ? "P/" + std::to_string(pob) + "/S" : "P//S";
+        const bool insertReg = !registration.empty();
+        const bool insertPob = pob > 0;
 
-        std::size_t regIndex = FindRegistrationInsertIndex(tokens);
-        std::size_t pobIndex = FindPobInsertIndex(tokens);
-
-        if (regIndex <= pobIndex)
+        if (!insertReg && !insertPob)
         {
-            tokens.insert(tokens.begin() + static_cast<std::ptrdiff_t>(regIndex), regToken);
-            ++pobIndex;
-            tokens.insert(tokens.begin() + static_cast<std::ptrdiff_t>(pobIndex), pobToken);
+            return JoinTokens(tokens);
+        }
+
+        if (insertReg && insertPob)
+        {
+            std::size_t regIndex = FindRegistrationInsertIndex(tokens);
+            std::size_t pobIndex = FindPobInsertIndex(tokens);
+
+            if (regIndex <= pobIndex)
+            {
+                tokens.insert(tokens.begin() + static_cast<std::ptrdiff_t>(regIndex), "REG/" + registration);
+                ++pobIndex;
+                tokens.insert(
+                    tokens.begin() + static_cast<std::ptrdiff_t>(pobIndex),
+                    "P/" + std::to_string(pob) + "/S");
+            }
+            else
+            {
+                tokens.insert(
+                    tokens.begin() + static_cast<std::ptrdiff_t>(pobIndex),
+                    "P/" + std::to_string(pob) + "/S");
+                tokens.insert(tokens.begin() + static_cast<std::ptrdiff_t>(regIndex), "REG/" + registration);
+            }
+        }
+        else if (insertReg)
+        {
+            const std::size_t regIndex = FindRegistrationInsertIndex(tokens);
+            tokens.insert(tokens.begin() + static_cast<std::ptrdiff_t>(regIndex), "REG/" + registration);
         }
         else
         {
-            tokens.insert(tokens.begin() + static_cast<std::ptrdiff_t>(pobIndex), pobToken);
-            tokens.insert(tokens.begin() + static_cast<std::ptrdiff_t>(regIndex), regToken);
+            const std::size_t pobIndex = FindPobInsertIndex(tokens);
+            tokens.insert(
+                tokens.begin() + static_cast<std::ptrdiff_t>(pobIndex),
+                "P/" + std::to_string(pob) + "/S");
         }
 
         return JoinTokens(tokens);

@@ -2,7 +2,7 @@
 
 #define PLUGIN_NAME        "REGPOB"
 #define PLUGIN_VERSION     "1.3.2"
-#define PLUGIN_AUTHOR      "VATSIM ESPlugin"
+#define PLUGIN_AUTHOR      "Hardhik Erat"
 #define PLUGIN_COPYRIGHT   "MIT License"
 
 // Tag item codes (display).

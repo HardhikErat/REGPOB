@@ -15,7 +15,8 @@ namespace RemarkParser
     // Extract POB from remarks (P/<n>/S token). Returns -1 when absent or invalid.
     int ExtractPOB(const std::string& remarks);
 
-    // Update or insert REG and POB tokens. Empty registration removes REG; pob <= 0 removes P.
+    // Update or insert REG and POB tokens when values are present.
+    // Empty registration removes REG; pob <= 0 removes P. No empty placeholders are added.
     std::string UpdateRemarks(
         const std::string& remarks,
         const std::string& registration,

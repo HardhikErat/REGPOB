@@ -60,11 +60,14 @@ private:
     void ApplyRemarksUpdate(EuroScopePlugIn::CFlightPlan flightPlan);
     void SyncAnnotationsFromCache(EuroScopePlugIn::CFlightPlan flightPlan);
     void SyncCacheFromAnnotations(const EuroScopePlugIn::CFlightPlan& flightPlan);
+    void SyncCacheFromRemarks(const EuroScopePlugIn::CFlightPlan& flightPlan);
     void HandleRegistrationCommit(EuroScopePlugIn::CFlightPlan flightPlan, const char* rawInput);
     void HandlePobCommit(EuroScopePlugIn::CFlightPlan flightPlan, const char* rawInput);
     void BeginRegistrationEdit(EuroScopePlugIn::CFlightPlan flightPlan, POINT Pt, RECT Area);
     void BeginPobEdit(EuroScopePlugIn::CFlightPlan flightPlan, POINT Pt, RECT Area);
     bool IsDepartureCandidate(const EuroScopePlugIn::CFlightPlan& flightPlan) const;
+    bool IsInManagedDepartureList(const std::string& callsign) const;
+    bool ShouldManageRemarks(const EuroScopePlugIn::CFlightPlan& flightPlan) const;
     void RefreshRegPobList(EuroScopePlugIn::CFlightPlanList& list);
     void ShowStartupMessage();
     static RECT NormalizeEditArea(POINT Pt, RECT Area);

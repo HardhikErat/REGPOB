@@ -22,6 +22,25 @@ namespace
         trimmed.erase(std::remove(trimmed.begin(), trimmed.end(), ' '), trimmed.end());
         return trimmed;
     }
+
+    bool HasEligibleDeparturePrefix(const std::string& origin)
+    {
+        if (origin.size() < 2)
+        {
+            return false;
+        }
+
+        const char prefix = static_cast<char>(std::toupper(static_cast<unsigned char>(origin[1])));
+        const char first = static_cast<char>(std::toupper(static_cast<unsigned char>(origin[0])));
+        return first == 'V' && (prefix == 'A' || prefix == 'E' || prefix == 'O' || prefix == 'I');
+    }
+
+    void LoadCacheFromRemarks(AircraftExtraData& data, const std::string& remarks)
+    {
+        data.registration = RemarkParser::ExtractRegistration(remarks);
+        const int pob = RemarkParser::ExtractPOB(remarks);
+        data.pob = pob > 0 ? pob : 0;
+    }
 }
 
 RegPobPlugin::RegPobPlugin()
@@ -143,20 +162,29 @@ void RegPobPlugin::EnsureCacheInitialized(const EuroScopePlugIn::CFlightPlan& fl
     data = cache_.Get(callsign);
     if (!data.initialized)
     {
-        const std::string remarks = SafeString(flightPlan.GetFlightPlanData().GetRemarks());
-        data.registration = RemarkParser::ExtractRegistration(remarks);
-        const int pob = RemarkParser::ExtractPOB(remarks);
-        data.pob = pob > 0 ? pob : 0;
-        data.initialized = true;
-        cache_.Set(callsign, data);
-        SyncAnnotationsFromCache(flightPlan);
+        SyncCacheFromRemarks(flightPlan);
     }
 }
 
 AircraftExtraData RegPobPlugin::GetDisplayData(const EuroScopePlugIn::CFlightPlan& flightPlan)
 {
     EnsureCacheInitialized(flightPlan);
-    return cache_.Get(flightPlan.GetCallsign());
+
+    const std::string remarks = SafeString(flightPlan.GetFlightPlanData().GetRemarks());
+    AircraftExtraData data = cache_.Get(flightPlan.GetCallsign());
+    const std::string remarkReg = RemarkParser::ExtractRegistration(remarks);
+    const int remarkPob = RemarkParser::ExtractPOB(remarks);
+    const int displayPob = remarkPob > 0 ? remarkPob : 0;
+
+    if (data.registration != remarkReg || data.pob != displayPob)
+    {
+        data.registration = remarkReg;
+        data.pob = displayPob;
+        cache_.Set(flightPlan.GetCallsign(), data);
+        SyncAnnotationsFromCache(flightPlan);
+    }
+
+    return data;
 }
 
 bool RegPobPlugin::LooksLikeCallsign(const std::string& value)
@@ -297,7 +325,7 @@ EuroScopePlugIn::CFlightPlan RegPobPlugin::ResolveFlightPlanForCommit()
 
 void RegPobPlugin::ApplyRemarksUpdate(EuroScopePlugIn::CFlightPlan flightPlan)
 {
-    if (!flightPlan.IsValid())
+    if (!flightPlan.IsValid() || !ShouldManageRemarks(flightPlan))
     {
         return;
     }
@@ -341,6 +369,24 @@ void RegPobPlugin::SyncAnnotationsFromCache(EuroScopePlugIn::CFlightPlan flightP
         pobText.c_str());
 
     suppressAnnotationSync_ = false;
+}
+
+void RegPobPlugin::SyncCacheFromRemarks(const EuroScopePlugIn::CFlightPlan& flightPlan)
+{
+    if (!flightPlan.IsValid())
+    {
+        return;
+    }
+
+    const std::string callsign = flightPlan.GetCallsign();
+    const std::string remarks = SafeString(flightPlan.GetFlightPlanData().GetRemarks());
+    AircraftExtraData data = cache_.Get(callsign);
+    LoadCacheFromRemarks(data, remarks);
+    data.initialized = true;
+    data.registrationEdited = false;
+    data.pobEdited = false;
+    cache_.Set(callsign, data);
+    SyncAnnotationsFromCache(flightPlan);
 }
 
 void RegPobPlugin::SyncCacheFromAnnotations(const EuroScopePlugIn::CFlightPlan& flightPlan)
@@ -592,35 +638,7 @@ void RegPobPlugin::OnFlightPlanFlightPlanDataUpdate(EuroScopePlugIn::CFlightPlan
         return;
     }
 
-    EnsureCacheInitialized(FlightPlan);
-
-    const std::string callsign = FlightPlan.GetCallsign();
-    AircraftExtraData data = cache_.Get(callsign);
-    const std::string remarks = SafeString(FlightPlan.GetFlightPlanData().GetRemarks());
-    const bool hasRegToken = RemarkParser::ContainsRegistrationToken(remarks);
-    const bool hasPobToken = RemarkParser::ContainsPobToken(remarks);
-    const std::string extractedReg = RemarkParser::ExtractRegistration(remarks);
-    const int extractedPob = RemarkParser::ExtractPOB(remarks);
-
-    // Keep cache aligned with remarks so manual removals in remarks clear list cells too.
-    data.registration = hasRegToken ? extractedReg : std::string();
-    data.pob = (hasPobToken && extractedPob > 0) ? extractedPob : 0;
-    data.initialized = true;
-    data.registrationEdited = false;
-    data.pobEdited = false;
-    cache_.Set(callsign, data);
-    SyncAnnotationsFromCache(FlightPlan);
-
-    const std::string expectedRemarks = RemarkParser::UpdateRemarks(
-        remarks,
-        data.registration,
-        data.pob);
-
-    if (expectedRemarks != remarks)
-    {
-        ApplyRemarksUpdate(FlightPlan);
-    }
-
+    SyncCacheFromRemarks(FlightPlan);
 }
 
 void RegPobPlugin::OnFlightPlanDisconnect(EuroScopePlugIn::CFlightPlan FlightPlan)
@@ -647,7 +665,7 @@ bool RegPobPlugin::IsDepartureCandidate(const EuroScopePlugIn::CFlightPlan& flig
     }
 
     const std::string origin = SafeString(flightPlan.GetFlightPlanData().GetOrigin());
-    if (origin.size() < 3)
+    if (!HasEligibleDeparturePrefix(origin))
     {
         return false;
     }
@@ -659,6 +677,28 @@ bool RegPobPlugin::IsDepartureCandidate(const EuroScopePlugIn::CFlightPlan& flig
     }
 
     return true;
+}
+
+bool RegPobPlugin::IsInManagedDepartureList(const std::string& callsign) const
+{
+    return regPobListMembers_.find(callsign) != regPobListMembers_.end();
+}
+
+bool RegPobPlugin::ShouldManageRemarks(const EuroScopePlugIn::CFlightPlan& flightPlan) const
+{
+    if (!IsDepartureCandidate(flightPlan))
+    {
+        return false;
+    }
+
+    const std::string callsign = flightPlan.GetCallsign();
+    if (IsInManagedDepartureList(callsign))
+    {
+        return true;
+    }
+
+    const AircraftExtraData data = cache_.Get(callsign);
+    return data.registrationEdited || data.pobEdited;
 }
 
 void RegPobPlugin::RefreshRegPobList(EuroScopePlugIn::CFlightPlanList& list)
